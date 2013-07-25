@@ -66,6 +66,18 @@ typedef NS_ENUM(NSUInteger, SMPageControlImageType) {
 	self.isAccessibilityElement = YES;
 	self.accessibilityTraits = UIAccessibilityTraitUpdatesFrequently;
 	self.accessibilityPageControl = [[UIPageControl alloc] init];
+    
+    UISwipeGestureRecognizer *swipeLeftGestureRecognizer = [[UISwipeGestureRecognizer alloc] initWithTarget:self action:@selector(swipe:)];
+    [swipeLeftGestureRecognizer setDirection:UISwipeGestureRecognizerDirectionLeft];
+    UISwipeGestureRecognizer *swipeRightGestureRecognizer =[[UISwipeGestureRecognizer alloc] initWithTarget:self action:@selector(swipe:)];
+    [swipeRightGestureRecognizer setDirection:UISwipeGestureRecognizerDirectionRight];
+    UITapGestureRecognizer *tapGestureRecognizer = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(tap:)];
+    tapGestureRecognizer.numberOfTapsRequired = 1;
+    [tapGestureRecognizer requireGestureRecognizerToFail:swipeLeftGestureRecognizer];
+    [tapGestureRecognizer requireGestureRecognizerToFail:swipeRightGestureRecognizer];
+    [self addGestureRecognizer:swipeLeftGestureRecognizer];
+    [self addGestureRecognizer:swipeRightGestureRecognizer];
+    [self addGestureRecognizer:tapGestureRecognizer];
 }
 
 - (id)initWithFrame:(CGRect)frame
@@ -79,15 +91,10 @@ typedef NS_ENUM(NSUInteger, SMPageControlImageType) {
     return self;
 }
 
-- (id)initWithCoder:(NSCoder *)aDecoder
+- (void)awakeFromNib
 {
-    self = [super initWithCoder:aDecoder];
-    if (nil == self) {
-        return nil;
-    }
-
-    [self _initialize];
-    return self;
+	[super awakeFromNib];
+	[self _initialize];
 }
 
 - (void)dealloc
@@ -405,21 +412,32 @@ typedef NS_ENUM(NSUInteger, SMPageControlImageType) {
 
 #pragma mark - Tap Gesture
 
-// We're using touchesEnded: because we want to mimick UIPageControl as close as possible
-// As of iOS 6, UIPageControl still (as far as we know) does not use a tap gesture recognizer. This means that actions like
-// touching down, sliding around, and releasing, still results in the page incrementing or decrementing.
-- (void)touchesEnded:(NSSet *)touches withEvent:(UIEvent *)event
-{
-	UITouch *touch = [touches anyObject];
-	CGPoint point = [touch locationInView:self];
+// The original creator's goal was to mimic UIPageControl as closely as possible and thus did not use gestures.
+// However, this resulted in behavior where swiping the control moved the page in the opposite direction as
+// swiping in its related scroll view.
+// This is not an issue when the PageControl is small.
+// However, for PageControls large enough to be swipable, this is a problem.
+// Thus I replaced touchesEnded: with swipe and tap gesture recognizers.
+
+- (void)tap:(UITapGestureRecognizer *)recognizer {
+    CGPoint point = [recognizer locationInView:self];
 	CGSize size = [self sizeForNumberOfPages:self.numberOfPages];
 	CGFloat left = [self _leftOffset];
 	CGFloat middle = left + (size.width / 2.0f);
 	if (point.x < middle) {
-		[self setCurrentPage:self.currentPage - 1 sendEvent:YES canDefer:YES];
+        [self setCurrentPage:self.currentPage - 1 sendEvent:YES canDefer:YES];
 	} else {
-		[self setCurrentPage:self.currentPage + 1 sendEvent:YES canDefer:YES];
+        [self setCurrentPage:self.currentPage + 1 sendEvent:YES canDefer:YES];
 	}
+}
+
+- (void)swipe:(UISwipeGestureRecognizer *)recognizer {
+    CGPoint point = [recognizer locationInView:self];
+    if (recognizer.direction == UISwipeGestureRecognizerDirectionLeft) {
+        [self setCurrentPage:self.currentPage + 1 sendEvent:YES canDefer:YES];
+    } else if (recognizer.direction == UISwipeGestureRecognizerDirectionRight) {
+        [self setCurrentPage:self.currentPage - 1 sendEvent:YES canDefer:YES];
+    }
 }
 
 #pragma mark - Accessors
